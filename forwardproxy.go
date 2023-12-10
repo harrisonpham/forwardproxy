@@ -299,13 +299,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request, next caddyht
 			fallthrough
 		case 3:
 			defer r.Body.Close()
-			wFlusher, ok := w.(http.Flusher)
-			if !ok {
-				return caddyhttp.Error(http.StatusInternalServerError,
-					fmt.Errorf("ResponseWriter doesn't implement http.Flusher"))
-			}
+			rc := http.NewResponseController(w)
 			w.WriteHeader(http.StatusOK)
-			wFlusher.Flush()
+			err := rc.Flush()
+			if err != nil {
+				return caddyhttp.Error(http.StatusInternalServerError, fmt.Errorf(err.Error()))
+			}
 			return dualStream(targetConn, r.Body, w)
 		}
 
@@ -574,11 +573,7 @@ func serveHiddenPage(w http.ResponseWriter, authErr error) error {
 // Hijacks the connection from ResponseWriter, writes the response and proxies data between targetConn
 // and hijacked connection.
 func serveHijack(w http.ResponseWriter, targetConn net.Conn) error {
-	hijacker, ok := w.(http.Hijacker)
-	if !ok {
-		return caddyhttp.Error(http.StatusInternalServerError,
-			fmt.Errorf("ResponseWriter does not implement http.Hijacker"))
-	}
+	hijacker := http.NewResponseController(w)
 	clientConn, bufReader, err := hijacker.Hijack()
 	if err != nil {
 		return caddyhttp.Error(http.StatusInternalServerError,
